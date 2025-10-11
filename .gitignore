@@ -1,5 +1,9 @@
 # New
-ehr_datasets/
+ehr_datasets/cdsl
+ehr_datasets/mimic-iv
+!ehr_datasets/mimic-iv/preprocess.py
+ehr_datasets/esrd
+
 pyehr/ehrdatasets/
 !pyehr/ehrdatasets/loader/
 logs/
