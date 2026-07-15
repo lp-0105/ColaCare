@@ -115,12 +115,8 @@ class LLMAgent(Agent):
 
     def invoke(self, messages: List[Dict[str, str]]) -> Dict[str, str]:
 
-        response = self.client.chat.completions.create(
-            model=self.llm_name,
-            messages=messages,
-            stream=False
-        )
-        content = response.choices[0].message.content
+        response = self.client.chat(messages)
+        content = response.content
         ans = extract_and_parse_json(content)
         return ans
 

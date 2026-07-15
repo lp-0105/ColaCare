@@ -4,7 +4,6 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from openai import OpenAI
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -14,7 +13,7 @@ from tenacity import (
 from utils.framework import *
 from utils.retrieve_utils import RetrievalSystem
 from utils.healthcare_context_utils import ContextBuilder
-from utils.config import deepseek_config, v1_config, v2_config, default_config
+from utils.llm_client import LLMClient
 from utils.prompt_template.template import *
 
 
@@ -25,20 +24,9 @@ class Agent:
         llm_name: str = "deepseek-chat"
     ) -> None:
         self.role = role
-        self.llm_name = llm_name
-
-        # Set the llm_config according to your api_key and your need.
-        if llm_name == "deepseek-chat":
-            self.llm_config = deepseek_config
-        elif "gpt" in llm_name.lower():
-            self.llm_config = v1_config
-        elif "qwen" in llm_name.lower() or "doubao" in llm_name.lower() or "claude" in llm_name.lower():
-            self.llm_config = v2_config
-        elif "llama" in llm_name.lower():
-            self.llm_config = default_config
-
-        self.client = OpenAI(
-            api_key=self.llm_config["api_key"], base_url=self.llm_config["api_base"])
+        self.requested_llm_name = llm_name
+        self.client = LLMClient.from_env()
+        self.llm_name = self.client.settings.model_name
 
 
 class DoctorAgent(Agent):
@@ -102,14 +90,10 @@ class DoctorAgent(Agent):
     def invoke(self, messages: List[Dict[str, str]]) -> Dict[str, str]:
         start = time.time()
         try:
-            response = self.client.chat.completions.create(
-                model=self.llm_name,
-                messages=messages,
-                stream=False
-            )
-            content = response.choices[0].message.content
-            prompt_token = response.usage.prompt_tokens
-            completion_token = response.usage.completion_tokens
+            response = self.client.chat(messages)
+            content = response.content
+            prompt_token = response.prompt_tokens
+            completion_token = response.completion_tokens
             ans = extract_and_parse_json(content)
         except Exception as e:
             raise e
@@ -247,14 +231,10 @@ class LeaderAgent(Agent):
     def invoke(self, messages: List[Dict[str, str]]) -> Dict[str, str]:
         start = time.time()
         try:
-            response = self.client.chat.completions.create(
-                model=self.llm_name,
-                messages=messages,
-                stream=False
-            )
-            content = response.choices[0].message.content
-            prompt_token = response.usage.prompt_tokens
-            completion_token = response.usage.completion_tokens
+            response = self.client.chat(messages)
+            content = response.content
+            prompt_token = response.prompt_tokens
+            completion_token = response.completion_tokens
             ans = extract_and_parse_json(content)
         except Exception as e:
             raise e
