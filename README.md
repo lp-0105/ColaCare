@@ -58,6 +58,8 @@ Ollama normally runs with its Windows application. If the checks report that por
 
 Defaults are documented in `.env.example`. To switch to another OpenAI-compatible service such as vLLM, set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_NAME`, `LLM_MAX_TOKENS`, `LLM_CONTEXT_LENGTH`, and `LLM_TEMPERATURE` in the process environment. `LLM_REASONING_EFFORT=none` is also used locally so the model returns only the concise result. Do not commit a real `.env`.
 
+The offline L20 transfer, checksum, vLLM startup, and staged scale-up procedure is in `docs/L20_OFFLINE_DEPLOYMENT.md`. Server templates are `configs/l20.env.example`, `scripts/start_vllm_server.sh`, and `scripts/run_l20_smoke_test.sh`.
+
 Successful runtime results and logs are written to ignored `artifacts/smoke/<stage>/`. The committed input is `tests/fixtures/synthetic_patient.json` and is marked as entirely fictional.
 
 ## Usage

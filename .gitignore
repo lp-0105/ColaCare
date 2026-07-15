@@ -6,6 +6,7 @@ ehr_datasets/esrd
 
 # Local reproduction: secrets, restricted data, and generated artifacts
 .env
+configs/l20.env
 .env.*
 !.env.example
 !configs/*.env.example
