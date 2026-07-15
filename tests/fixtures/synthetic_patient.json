@@ -1,0 +1,46 @@
+{
+  "synthetic": true,
+  "patient_id": "SYNTHETIC-0001",
+  "age": 67,
+  "sex": "female",
+  "diagnoses": [
+    "Community-acquired pneumonia",
+    "Hypertension"
+  ],
+  "vital_signs": {
+    "temperature_c": 38.2,
+    "heart_rate_bpm": 105,
+    "respiratory_rate_per_min": 24,
+    "systolic_bp_mm_hg": 108,
+    "diastolic_bp_mm_hg": 66,
+    "oxygen_saturation_pct": 91
+  },
+  "laboratory_results": {
+    "wbc_10e9_per_l": 14.2,
+    "creatinine_mg_per_dl": 1.1,
+    "lactate_mmol_per_l": 2.3,
+    "crp_mg_per_l": 74
+  },
+  "ehr_expert": {
+    "model_name": "SyntheticEHRExpert",
+    "risk_probability": 0.42,
+    "important_features": [
+      {
+        "feature": "oxygen_saturation_pct",
+        "value": 91,
+        "importance": 0.31
+      },
+      {
+        "feature": "respiratory_rate_per_min",
+        "value": 24,
+        "importance": 0.22
+      },
+      {
+        "feature": "lactate_mmol_per_l",
+        "value": 2.3,
+        "importance": 0.16
+      }
+    ]
+  },
+  "notice": "Entirely fictional record created only for software testing; not for clinical use."
+}

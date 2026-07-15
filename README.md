@@ -29,6 +29,26 @@ conda activate colacare
 pip install -r requirements.txt
 ```
 
+## Local Small-LLM Smoke Test (No Clinical Data)
+
+This smoke test uses one entirely fictional patient, one sequential DoctorAgent, no MetaAgent, no discussion, no RAG, and no EHR checkpoint. It validates the local software chain only; it does not reproduce the paper's metrics and is not clinical advice.
+
+The default local configuration is Ollama plus `qwen3:4b`, context 4096, 256 output tokens, temperature 0, and reasoning disabled. From the repository root on Windows PowerShell:
+
+```powershell
+ollama pull qwen3:4b
+python scripts/check_environment.py
+python scripts/test_llm_api.py
+python scripts/run_synthetic_smoke.py --stage single
+ollama ps
+```
+
+Ollama normally runs with its Windows application. If the checks report that port 11434 is unreachable, start the local service with `ollama serve` in a separate terminal and repeat the commands.
+
+Defaults are documented in `.env.example`. To switch to another OpenAI-compatible service such as vLLM, set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_NAME`, `LLM_MAX_TOKENS`, `LLM_CONTEXT_LENGTH`, and `LLM_TEMPERATURE` in the process environment. `LLM_REASONING_EFFORT=none` is also used locally so the model returns only the concise result. Do not commit a real `.env`.
+
+Successful runtime results and logs are written to ignored `artifacts/smoke/single/`. The committed input is `tests/fixtures/synthetic_patient.json` and is marked as entirely fictional.
+
 ## Usage
 
 ### Training EHR models in pyehr
