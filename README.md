@@ -43,11 +43,22 @@ python scripts/run_synthetic_smoke.py --stage single
 ollama ps
 ```
 
+After `single` succeeds, the cumulative extensions remain independently runnable and are always sequential:
+
+```powershell
+python scripts/run_synthetic_smoke.py --stage two-doctors
+python scripts/run_synthetic_smoke.py --stage meta
+python scripts/run_synthetic_smoke.py --stage discussion
+python scripts/run_synthetic_smoke.py --stage rag
+```
+
+The `rag` mode uses only `tests/fixtures/synthetic_guidelines.json` and deterministic lexical overlap. It is a software fixture, not MSD, MedCPT, or clinical guidance.
+
 Ollama normally runs with its Windows application. If the checks report that port 11434 is unreachable, start the local service with `ollama serve` in a separate terminal and repeat the commands.
 
 Defaults are documented in `.env.example`. To switch to another OpenAI-compatible service such as vLLM, set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_NAME`, `LLM_MAX_TOKENS`, `LLM_CONTEXT_LENGTH`, and `LLM_TEMPERATURE` in the process environment. `LLM_REASONING_EFFORT=none` is also used locally so the model returns only the concise result. Do not commit a real `.env`.
 
-Successful runtime results and logs are written to ignored `artifacts/smoke/single/`. The committed input is `tests/fixtures/synthetic_patient.json` and is marked as entirely fictional.
+Successful runtime results and logs are written to ignored `artifacts/smoke/<stage>/`. The committed input is `tests/fixtures/synthetic_patient.json` and is marked as entirely fictional.
 
 ## Usage
 

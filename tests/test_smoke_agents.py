@@ -7,7 +7,11 @@ from utils.llm_client import LLMResponse
 from utils.smoke_agents import (
     SmokePipelineError,
     SyntheticDoctorAgent,
+    run_discussion_stage,
+    run_meta_stage,
+    run_rag_stage,
     run_single_stage,
+    run_two_doctor_stage,
     validate_synthetic_patient,
     write_json_atomic,
 )
@@ -15,6 +19,7 @@ from utils.smoke_agents import (
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "synthetic_patient.json"
+GUIDELINES = ROOT / "tests" / "fixtures" / "synthetic_guidelines.json"
 
 
 def valid_response(probability=0.42, prediction=0):
@@ -29,6 +34,30 @@ def valid_response(probability=0.42, prediction=0):
         prompt_tokens=100,
         completion_tokens=40,
     )
+
+
+def discussion_response(stance="agree", probability=0.42):
+    return LLMResponse(
+        json.dumps(
+            {
+                "stance": stance,
+                "revised_probability": probability,
+                "reasoning_summary": "Short fictional critique for one discussion round.",
+            }
+        ),
+        prompt_tokens=80,
+        completion_tokens=30,
+    )
+
+
+def valid_response_payload(probability=0.42, prediction=0):
+    return {
+        "agent_id": "meta-1",
+        "role": "MetaAgent",
+        "risk_probability": probability,
+        "prediction": prediction,
+        "reasoning_summary": "Short fictional meta conclusion.",
+    }
 
 
 class QueueClient:
@@ -97,6 +126,67 @@ class SyntheticDoctorAgentTests(unittest.TestCase):
         self.assertEqual(result["discussion_rounds"], 0)
         self.assertFalse(result["rag_enabled"])
         self.assertEqual(result["final_prediction"]["prediction"], 0)
+
+    def test_two_doctors_run_sequentially_in_stable_order(self):
+        client = QueueClient([valid_response(0.4, 0), valid_response(0.6, 1)])
+        result = run_two_doctor_stage(self.patient, client)
+        self.assertEqual([item["agent_id"] for item in result["doctor_results"]], [
+            "doctor-1", "doctor-2"
+        ])
+        self.assertEqual(len(client.calls), 2)
+        self.assertIn("doctor-1", client.calls[0]["messages"][-1]["content"])
+        self.assertIn("doctor-2", client.calls[1]["messages"][-1]["content"])
+
+    def test_meta_agent_consumes_both_doctor_results(self):
+        client = QueueClient([
+            valid_response(0.4, 0), valid_response(0.6, 1), valid_response(0.52, 1)
+        ])
+        result = run_meta_stage(self.patient, client)
+        self.assertTrue(result["meta_agent_enabled"])
+        self.assertEqual(result["discussion_rounds"], 0)
+        self.assertEqual(result["final_prediction"]["risk_probability"], 0.52)
+        meta_prompt = client.calls[2]["messages"][-1]["content"]
+        self.assertIn("doctor-1", meta_prompt)
+        self.assertIn("doctor-2", meta_prompt)
+
+    def test_discussion_stage_runs_exactly_one_round(self):
+        client = QueueClient([
+            valid_response(0.4, 0),
+            valid_response(0.6, 1),
+            valid_response(0.52, 1),
+            discussion_response("agree", 0.5),
+            discussion_response("disagree", 0.57),
+            valid_response(0.54, 1),
+        ])
+        result = run_discussion_stage(self.patient, client)
+        self.assertEqual(result["discussion_rounds"], 1)
+        self.assertEqual(len(result["discussion"]["doctor_critiques"]), 2)
+        self.assertEqual(len(client.calls), 6)
+        self.assertEqual(result["final_prediction"]["risk_probability"], 0.54)
+
+    def test_discussion_format_failure_is_retried(self):
+        invalid = LLMResponse(json.dumps({"stance": "maybe"}))
+        client = QueueClient([invalid, discussion_response("agree", 0.5)])
+        agent = SyntheticDoctorAgent(client, "doctor-1", retry_delay_seconds=0)
+        result = agent.discuss(self.patient, valid_response_payload())
+        self.assertEqual(result["attempts"], 2)
+
+    def test_rag_stage_adds_fictional_documents_to_sequential_flow(self):
+        documents = json.loads(GUIDELINES.read_text(encoding="utf-8"))
+        client = QueueClient([
+            valid_response(0.4, 0),
+            valid_response(0.6, 1),
+            valid_response(0.52, 1),
+            discussion_response("agree", 0.5),
+            discussion_response("agree", 0.55),
+            valid_response(0.53, 1),
+        ])
+        result = run_rag_stage(self.patient, client, documents)
+        self.assertTrue(result["rag_enabled"])
+        self.assertEqual(result["discussion_rounds"], 1)
+        self.assertGreaterEqual(len(result["retrieved_documents"]), 1)
+        first_prompt = client.calls[0]["messages"][-1]["content"]
+        self.assertIn("Document [SYN-GUIDE-", first_prompt)
 
 
 class ArtifactTests(unittest.TestCase):

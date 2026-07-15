@@ -12,11 +12,22 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.llm_client import LLMClient
-from utils.smoke_agents import SmokePipelineError, run_single_stage, validate_synthetic_patient, write_json_atomic
+from utils.local_rag import load_synthetic_guidelines
+from utils.smoke_agents import (
+    SmokePipelineError,
+    run_discussion_stage,
+    run_meta_stage,
+    run_rag_stage,
+    run_single_stage,
+    run_two_doctor_stage,
+    validate_synthetic_patient,
+    write_json_atomic,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "tests" / "fixtures" / "synthetic_patient.json"
+DEFAULT_GUIDELINES = ROOT / "tests" / "fixtures" / "synthetic_guidelines.json"
 DEFAULT_OUTPUT_ROOT = ROOT / "artifacts" / "smoke"
 
 
@@ -32,14 +43,30 @@ def load_patient(path: Path) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", choices=["single"], default="single")
+    parser.add_argument(
+        "--stage",
+        choices=["single", "two-doctors", "meta", "discussion", "rag"],
+        default="single",
+    )
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
+    parser.add_argument("--guidelines", type=Path, default=DEFAULT_GUIDELINES)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     args = parser.parse_args(argv)
     try:
         patient = load_patient(args.fixture)
         client = LLMClient.from_env()
-        result = run_single_stage(patient, client)
+        if args.stage == "single":
+            result = run_single_stage(patient, client)
+        elif args.stage == "two-doctors":
+            result = run_two_doctor_stage(patient, client)
+        elif args.stage == "meta":
+            result = run_meta_stage(patient, client)
+        elif args.stage == "discussion":
+            result = run_discussion_stage(patient, client)
+        else:
+            result = run_rag_stage(
+                patient, client, load_synthetic_guidelines(args.guidelines)
+            )
         result["llm"] = {
             "base_url": client.settings.base_url,
             "model": client.settings.model_name,
@@ -54,7 +81,7 @@ def main(argv=None) -> int:
         with (stage_dir / "run.log").open("a", encoding="utf-8") as log:
             timestamp = datetime.now(timezone.utc).isoformat()
             log.write(f"{timestamp} status=success stage={args.stage} patient=synthetic\n")
-    except SmokePipelineError as exc:
+    except (SmokePipelineError, OSError, ValueError) as exc:
         print(f"Synthetic smoke failed: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, ensure_ascii=False))

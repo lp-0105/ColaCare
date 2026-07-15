@@ -1,0 +1,20 @@
+[
+  {
+    "synthetic": true,
+    "id": "SYN-GUIDE-RESP-001",
+    "title": "Fictional respiratory observation note",
+    "content": "For software testing, low oxygen saturation with increased respiratory rate is ranked as a respiratory observation requiring closer review. This is not a clinical guideline."
+  },
+  {
+    "synthetic": true,
+    "id": "SYN-GUIDE-INFLAM-001",
+    "title": "Fictional inflammation observation note",
+    "content": "For software testing, elevated white blood cell count and C-reactive protein are ranked as inflammation-related features. This is not a clinical guideline."
+  },
+  {
+    "synthetic": true,
+    "id": "SYN-GUIDE-RENAL-001",
+    "title": "Fictional renal observation note",
+    "content": "For software testing, creatinine is treated as a renal feature and must be interpreted only inside the supplied fictional record. This is not a clinical guideline."
+  }
+]
