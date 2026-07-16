@@ -36,6 +36,21 @@ class LLMSettingsTests(unittest.TestCase):
         settings = LLMSettings.from_env({"LLM_BASE_URL": "http://localhost:8000/v1/"})
         self.assertEqual(settings.base_url, "http://localhost:8000/v1")
 
+    def test_vllm_switch_uses_only_openai_compatible_endpoint_key_and_model(self):
+        settings = LLMSettings.from_env(
+            {
+                "LLM_BASE_URL": "http://127.0.0.1:8000/v1",
+                "LLM_API_KEY": "EMPTY",
+                "LLM_MODEL_NAME": "qwen3-4b-local",
+            }
+        )
+        self.assertEqual(settings.base_url, "http://127.0.0.1:8000/v1")
+        self.assertEqual(settings.api_key, "EMPTY")
+        self.assertEqual(settings.model_name, "qwen3-4b-local")
+        self.assertEqual(settings.context_length, 4096)
+        self.assertEqual(settings.max_tokens, 256)
+        self.assertEqual(settings.temperature, 0.0)
+
     def test_invalid_numeric_value_has_variable_name(self):
         with self.assertRaisesRegex(LLMConfigurationError, "LLM_MAX_TOKENS"):
             LLMSettings.from_env({"LLM_MAX_TOKENS": "many"})

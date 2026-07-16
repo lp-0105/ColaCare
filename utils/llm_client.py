@@ -1,4 +1,4 @@
-"""Environment-driven helpers for OpenAI-compatible LLM services."""
+"""Environment-driven OpenAI-compatible client for Ollama, vLLM, or equivalent services."""
 
 from __future__ import annotations
 

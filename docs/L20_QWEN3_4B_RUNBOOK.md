@@ -11,7 +11,7 @@
 ```bash
 export MODEL_ID='Qwen/Qwen3-4B-Instruct-2507'
 export MODEL_REVISION='cdbee75f17c01a7cc42f958dc650907174af0554'
-export COLACARE_COMMIT='5374852ed2a082a37ada3102c6b91d0c94eda232'
+export COLACARE_BASE_COMMIT='5374852ed2a082a37ada3102c6b91d0c94eda232'
 ```
 
 该快照约 8.061 GB（十进制，7.51 GiB），其中 3 个 BF16 safetensors 权重约 8.045 GB。
@@ -22,17 +22,21 @@ export COLACARE_COMMIT='5374852ed2a082a37ada3102c6b91d0c94eda232'
 
 ## 1. 有网机器准备下载环境
 
-在有足够空间的 Linux/WSL 有网机器克隆本分支。以下环境只用于下载，不会进入代码归档：
+在有足够空间的 Linux/WSL 有网机器克隆本分支并进入仓库根目录。以下环境只用于下载，
+工作目录默认放在仓库同级，不会进入代码归档：
 
 ```bash
-export WORK_ROOT="$PWD/colacare-offline-work"
-export REPO_DIR="$PWD/ColaCare"
+export REPO_DIR="${REPO_DIR:-$PWD}"
+test -d "$REPO_DIR/.git"
+export WORK_ROOT="${WORK_ROOT:-$(dirname "$REPO_DIR")/colacare-offline-work}"
 export MODEL_DIR="$WORK_ROOT/models/Qwen3-4B-Instruct-2507"
 export PACKAGE_DIR="$WORK_ROOT/packages"
+export COLACARE_COMMIT="$(git -C "$REPO_DIR" rev-parse l20-qwen3-4b^{commit})"
+mkdir -p "$WORK_ROOT" "$MODEL_DIR" "$PACKAGE_DIR"
 python3 -m venv "$WORK_ROOT/download-venv"
 source "$WORK_ROOT/download-venv/bin/activate"
 python -m pip install --upgrade pip huggingface_hub
-mkdir -p "$MODEL_DIR" "$PACKAGE_DIR"
+printf 'Base commit: %s\nL20 branch commit: %s\n' "$COLACARE_BASE_COMMIT" "$COLACARE_COMMIT"
 ```
 
 如模型仓库以后要求认证，只在有网机器使用 Hugging Face 凭据；不要复制 token、缓存凭据、
@@ -364,4 +368,3 @@ git check-ignore models/example.safetensors data/mimic.csv artifacts/l20_smoke/r
 
 四个哨兵路径必须都显示为 ignored；任何意外跟踪或大文件都应先停止调查。不要改写 Git 历史、
 不要强推、不要合并 `main`，也不要向官方仓库创建 Pull Request。
-

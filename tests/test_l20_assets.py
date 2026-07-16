@@ -56,9 +56,10 @@ class L20AssetTests(unittest.TestCase):
         config = (ROOT / "configs" / "l20.env.example").read_text(encoding="utf-8")
         for required in (
             "MODEL_DIR=",
-            "LLM_BASE_URL=",
-            "LLM_API_KEY=offline-local",
-            "LLM_MODEL_NAME=",
+            "SERVED_MODEL_NAME=qwen3-4b-local",
+            "LLM_BASE_URL=http://127.0.0.1:8000/v1",
+            "LLM_API_KEY=EMPTY",
+            "LLM_MODEL_NAME=qwen3-4b-local",
             "LLM_CONTEXT_LENGTH=4096",
             "LLM_MAX_TOKENS=256",
             "LLM_TEMPERATURE=0",
@@ -68,6 +69,19 @@ class L20AssetTests(unittest.TestCase):
         ):
             self.assertIn(required, config)
         self.assertNotIn("sk-", config)
+
+    def test_vllm_next_step_is_documented_without_install_commands_for_current_stage(self):
+        doc = (ROOT / "docs" / "L20_VLLM_NEXT_STEP.md").read_text(encoding="utf-8")
+        for required in (
+            "本阶段不执行",
+            "独立",
+            "离线",
+            "http://127.0.0.1:8000/v1",
+            "LLM_API_KEY=EMPTY",
+            "LLM_MODEL_NAME=qwen3-4b-local",
+            "风险",
+        ):
+            self.assertIn(required, doc)
 
     def test_deployment_doc_covers_required_offline_workflow(self):
         doc = (ROOT / "docs" / "L20_OFFLINE_DEPLOYMENT.md").read_text(encoding="utf-8")
