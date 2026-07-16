@@ -4,9 +4,9 @@
 
 ## 环境与版本
 
-- 分支：`local-small-llm`
+- 稳定分支：`local-small-llm`
 - 上游基线：`854878741b2a620fb7d0c643983a0f802b2bf3be`
-- 本记录前的实现 commit：`e642fa43650ae4b61da24e5ceb5b15b5fee2d693`
+- 本地链路稳定 commit：`5374852ed2a082a37ada3102c6b91d0c94eda232`
 - Windows：Windows 11 build 26200
 - Windows Python：3.13.13（Anaconda）；未安装 PyTorch
 - WSL2：Ubuntu 24.04.3、Python 3.12.3；未安装 PyTorch/nvcc
@@ -65,6 +65,14 @@ python -m unittest discover -s tests -v
 - 没有真实 EHR 专家模型的已保存输出或检查点，因此未声称完成真实专家输出接入；当前 fixture 中的 0.42 是明确标注的模拟专家概率。
 - 没有下载或运行 MIMIC、MSD、MedCPT、GatorTron，也没有调用 DeepSeek API。
 - 没有在 L20 真机启动 vLLM；本地只验证了离线资产、shell 语法、启动前置保护和同一 OpenAI 兼容调用链。L20 的显存、吞吐与 wheel/CUDA 兼容性仍需目标服务器实测。
+- 尚未在 L20 上上传或加载 `Qwen/Qwen3-4B-Instruct-2507`，因此也没有 L20 Transformers 实测耗时和峰值显存。本分支只准备可审计的离线下载、传输、校验和首条推理脚本。
 - 官方完整 `collaboration_pipeline.py` 仍依赖缺失的正式数据、检索资产、专家输出和额外 Python 包；本次采用最小侵入适配层与独立模拟冒烟入口，没有把它包装成完整论文复现。
 
 运行日志与患者级/样本级结果只保存在被 `.gitignore` 排除的 `artifacts/`，未进入 Git 历史。
+
+## 本地模型与 L20 模型的关系
+
+本地 `ollama qwen3:4b` 是为 RTX 4060 链路开发使用的 Ollama 量化缓存；L20 计划使用
+Hugging Face 标准 Transformers/Safetensors 格式的 `Qwen/Qwen3-4B-Instruct-2507`
+BF16 快照。两者不是同一组可互换文件，也不应把 Ollama blob 复制成 L20 模型目录。
+前者证明 Agent 编排和 JSON 合同，后者才是后续 L20 正式实验应固定的模型资产。
