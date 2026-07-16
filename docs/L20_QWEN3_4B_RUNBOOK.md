@@ -142,7 +142,8 @@ df -h "$HOME" "$TRANSFER_ROOT"
 
 ```bash
 cd "$TRANSFER_ROOT"
-grep -E '(\.part-[0-9]+|colacare-.*\.tar\.gz)$' OFFLINE_ASSET_SHA256SUMS \
+grep -E '(\.part-[0-9]+|colacare-.*\.tar\.gz|OFFLINE_ASSET_MANIFEST\.txt)$' \
+  OFFLINE_ASSET_SHA256SUMS \
   | sha256sum -c -
 ```
 
