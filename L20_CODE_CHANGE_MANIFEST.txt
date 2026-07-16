@@ -1,0 +1,55 @@
+L20 DIRECT PIPELINE CODE CHANGE MANIFEST
+========================================
+
+Baseline commit: c81e5b1f99ec3abe87b54a716893403589759a20
+Baseline archive: /share/home/2023300013/colacare_offline/uploads/colacare-c81e5b1f99ec.tar.gz
+Export archive: l20-direct-pipeline-c81e5b1f.tar.gz
+Archive layout: repository-relative paths only
+Prepared for: synchronization back to the local ColaCare repository
+
+BASELINE DIFFERENCE AUDIT
+-------------------------
+Modified baseline files: none
+Removed baseline files: none
+Added during L20 direct-pipeline debugging:
+- scripts/run_l20_pipeline_direct.py
+
+Files created for this result-only archival pass:
+- tests/test_l20_pipeline_direct.py
+- docs/L20_DIRECT_PIPELINE_RESULTS.md
+- L20_CODE_CHANGE_MANIFEST.txt
+
+PACKAGED FILES
+--------------
+SHA256: a28d08a2ba8472387b6c354ce9e460a0d5d1b724dcf8cfd4c284059ef0121b12
+Path: scripts/run_l20_pipeline_direct.py
+Purpose: Minimal direct Hugging Face Transformers backend and sequential single/two-doctors/meta/discussion/rag synthetic smoke runner. Reuses one loaded model instance.
+
+SHA256: 2f383468562ef0625e85aa12447ec7beb01654a2fb096f0e41c9506d5151a2e6
+Path: tests/test_l20_pipeline_direct.py
+Purpose: Model-free unit tests for JSON extraction, stage ordering, message handling, and call-metric aggregation.
+
+SHA256: 5162e6540d3c49119fd08e18bfeba8f23fb7ffd4c8da7569c711a5b12129bb24
+Path: docs/L20_DIRECT_PIPELINE_RESULTS.md
+Purpose: Auditable summary of the L20 environment, dependency repair, five-stage measured results, offline status, limits, and server-side evidence paths.
+
+SHA256: SELF (not embedded because a file cannot contain its own final digest)
+Path: L20_CODE_CHANGE_MANIFEST.txt
+Purpose: Enumerates every packaged file, its purpose, integrity method, and exclusions. Its exact archived bytes are covered by the external l20-direct-pipeline-c81e5b1f.tar.gz.sha256 file.
+
+EXCLUDED FROM THE EXPORT
+------------------------
+- Model weights and model archives
+- artifacts/ complete model outputs
+- Logs
+- .env and other environment files
+- Patient or MIMIC data
+- vendor/ dependencies
+- Uploaded archives and runtime wheels
+- Caches, virtual environments, .git metadata, secrets, and keys
+
+INTEGRITY NOTES
+---------------
+- The three non-manifest payload digests above are SHA256 values computed from the files immediately before packaging.
+- The external archive SHA256 authenticates the archive as a whole, including this manifest.
+- The post-package verification extracts into a newly created directory and independently rechecks the three payload digests.
