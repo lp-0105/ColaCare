@@ -10,6 +10,8 @@ configs/l20.env
 .env.*
 !.env.example
 !configs/*.env.example
+/mimic-iv-2.2/
+/ehr_datasets/mimic-iv/processed/
 models/
 data/
 datasets/
@@ -33,6 +35,7 @@ tmp/
 *MIMIC*.csv.gz
 *MIMIC*.parquet
 *MIMIC*.pkl
+*.pkl
 *.jsonl
 *.jsonl.gz
 *.npy
