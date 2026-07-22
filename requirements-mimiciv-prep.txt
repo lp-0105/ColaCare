@@ -1,0 +1,7 @@
+# Isolated local raw-to-parquet/pickle preparation environment.
+# PyTorch is intentionally omitted; use the already verified CUDA environment
+# for scripts/train_mimiciv_ehr_smoke.py.
+numpy==1.26.4
+pandas==2.3.3
+pyarrow==19.0.1
+psutil==7.2.2

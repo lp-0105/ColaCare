@@ -1,0 +1,15 @@
+{
+  "mode": "smoke",
+  "data_version": "MIMIC-IV 2.2",
+  "cohort_limit": 600,
+  "candidate_multiplier": 1.5,
+  "minimum_observed_hours": 6,
+  "observation_hours": 48,
+  "time_bin_hours": 1,
+  "full_scan": false,
+  "max_chartevents_rows_observed_in_run": 12000000,
+  "include_labevents": false,
+  "categorical_contract": "training-observed",
+  "observed_lab_dim": 41,
+  "provisional": true
+}

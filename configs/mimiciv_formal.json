@@ -1,0 +1,27 @@
+{
+  "mode": "formal",
+  "data_version": "MIMIC-IV 2.2",
+  "task": "in-hospital mortality",
+  "label_column": "hospital_expire_flag",
+  "sample_unit": "first ICU stay per subject",
+  "select_first_icu_before_filters": true,
+  "adult_minimum_age": 18,
+  "minimum_icu_los_hours": 48,
+  "observation_hours": 48,
+  "time_bin_hours": 1,
+  "cohort_limit": null,
+  "minimum_observed_hours": 0,
+  "full_scan": true,
+  "max_chartevents_rows": null,
+  "include_labevents": true,
+  "labevents_priority": "labevents_over_chartevents_within_feature_hour",
+  "split_fractions": {
+    "train": 0.9,
+    "validation": 0.05,
+    "test": 0.05
+  },
+  "random_seed": 42,
+  "categorical_contract": "colacare-historical-47-one-hot-plus-12-numerical",
+  "demo_dim": 2,
+  "lab_dim": 59
+}
