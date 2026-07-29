@@ -1,0 +1,280 @@
+{
+  "schema_version": "expert-agent-input-v1",
+  "data_contract": "formal_v2",
+  "observation_window_hours": 48,
+  "time_bin_hours": 1,
+  "default_top_k": 8,
+  "trend": {
+    "method": "latest_minus_earliest",
+    "zero_tolerance": 1e-12
+  },
+  "risk_bands": [
+    {
+      "upper_exclusive": 0.25,
+      "label": "lower model-estimated risk"
+    },
+    {
+      "upper_exclusive": 0.5,
+      "label": "moderate model-estimated risk"
+    },
+    {
+      "upper_exclusive": 0.75,
+      "label": "elevated model-estimated risk"
+    },
+    {
+      "upper_exclusive": 1.0000000001,
+      "label": "high model-estimated risk"
+    }
+  ],
+  "disagreement": {
+    "measure": "max_probability_minus_min_probability",
+    "low_upper_inclusive": 0.1,
+    "moderate_upper_inclusive": 0.25
+  },
+  "age_bands": [
+    {
+      "minimum": 18,
+      "maximum_exclusive": 35,
+      "label": "18-34"
+    },
+    {
+      "minimum": 35,
+      "maximum_exclusive": 45,
+      "label": "35-44"
+    },
+    {
+      "minimum": 45,
+      "maximum_exclusive": 55,
+      "label": "45-54"
+    },
+    {
+      "minimum": 55,
+      "maximum_exclusive": 65,
+      "label": "55-64"
+    },
+    {
+      "minimum": 65,
+      "maximum_exclusive": 75,
+      "label": "65-74"
+    },
+    {
+      "minimum": 75,
+      "maximum_exclusive": 85,
+      "label": "75-84"
+    },
+    {
+      "minimum": 85,
+      "maximum_exclusive": 200,
+      "label": "85+"
+    }
+  ],
+  "sex_mapping": {
+    "0": "female",
+    "1": "male"
+  },
+  "feature_contract": {
+    "mapping_version": "colacare-mimiciv-formal-v2-agent-v1",
+    "demo_dim": 2,
+    "dynamic_dim": 59,
+    "input_dim": 61,
+    "mask_semantics": "1=missing, 0=observed",
+    "model_input_semantics": "x is normalized/imputed and is never rendered as a clinical value",
+    "raw_input_semantics": "raw_x plus missing_mask is the only source for rendered clinical values",
+    "feature_names": [
+      "Sex",
+      "Age",
+      "Capillary refill rate->0.0",
+      "Capillary refill rate->1.0",
+      "Glascow coma scale eye opening->To Pain",
+      "Glascow coma scale eye opening->3 To speech",
+      "Glascow coma scale eye opening->1 No Response",
+      "Glascow coma scale eye opening->4 Spontaneously",
+      "Glascow coma scale eye opening->None",
+      "Glascow coma scale eye opening->To Speech",
+      "Glascow coma scale eye opening->Spontaneously",
+      "Glascow coma scale eye opening->2 To pain",
+      "Glascow coma scale motor response->1 No Response",
+      "Glascow coma scale motor response->3 Abnorm flexion",
+      "Glascow coma scale motor response->Abnormal extension",
+      "Glascow coma scale motor response->No response",
+      "Glascow coma scale motor response->4 Flex-withdraws",
+      "Glascow coma scale motor response->Localizes Pain",
+      "Glascow coma scale motor response->Flex-withdraws",
+      "Glascow coma scale motor response->Obeys Commands",
+      "Glascow coma scale motor response->Abnormal Flexion",
+      "Glascow coma scale motor response->6 Obeys Commands",
+      "Glascow coma scale motor response->5 Localizes Pain",
+      "Glascow coma scale motor response->2 Abnorm extensn",
+      "Glascow coma scale total->11",
+      "Glascow coma scale total->10",
+      "Glascow coma scale total->13",
+      "Glascow coma scale total->12",
+      "Glascow coma scale total->15",
+      "Glascow coma scale total->14",
+      "Glascow coma scale total->3",
+      "Glascow coma scale total->5",
+      "Glascow coma scale total->4",
+      "Glascow coma scale total->7",
+      "Glascow coma scale total->6",
+      "Glascow coma scale total->9",
+      "Glascow coma scale total->8",
+      "Glascow coma scale verbal response->1 No Response",
+      "Glascow coma scale verbal response->No Response",
+      "Glascow coma scale verbal response->Confused",
+      "Glascow coma scale verbal response->Inappropriate Words",
+      "Glascow coma scale verbal response->Oriented",
+      "Glascow coma scale verbal response->No Response-ETT",
+      "Glascow coma scale verbal response->5 Oriented",
+      "Glascow coma scale verbal response->Incomprehensible sounds",
+      "Glascow coma scale verbal response->1.0 ET/Trach",
+      "Glascow coma scale verbal response->4 Confused",
+      "Glascow coma scale verbal response->2 Incomp sounds",
+      "Glascow coma scale verbal response->3 Inapprop words",
+      "Diastolic blood pressure",
+      "Fraction inspired oxygen",
+      "Glucose",
+      "Heart Rate",
+      "Height",
+      "Mean blood pressure",
+      "Oxygen saturation",
+      "Respiratory rate",
+      "Systolic blood pressure",
+      "Temperature",
+      "Weight",
+      "pH"
+    ],
+    "categorical_groups": {
+      "Capillary refill rate": [
+        "Capillary refill rate->0.0",
+        "Capillary refill rate->1.0"
+      ],
+      "Glascow coma scale eye opening": [
+        "Glascow coma scale eye opening->To Pain",
+        "Glascow coma scale eye opening->3 To speech",
+        "Glascow coma scale eye opening->1 No Response",
+        "Glascow coma scale eye opening->4 Spontaneously",
+        "Glascow coma scale eye opening->None",
+        "Glascow coma scale eye opening->To Speech",
+        "Glascow coma scale eye opening->Spontaneously",
+        "Glascow coma scale eye opening->2 To pain"
+      ],
+      "Glascow coma scale motor response": [
+        "Glascow coma scale motor response->1 No Response",
+        "Glascow coma scale motor response->3 Abnorm flexion",
+        "Glascow coma scale motor response->Abnormal extension",
+        "Glascow coma scale motor response->No response",
+        "Glascow coma scale motor response->4 Flex-withdraws",
+        "Glascow coma scale motor response->Localizes Pain",
+        "Glascow coma scale motor response->Flex-withdraws",
+        "Glascow coma scale motor response->Obeys Commands",
+        "Glascow coma scale motor response->Abnormal Flexion",
+        "Glascow coma scale motor response->6 Obeys Commands",
+        "Glascow coma scale motor response->5 Localizes Pain",
+        "Glascow coma scale motor response->2 Abnorm extensn"
+      ],
+      "Glascow coma scale total": [
+        "Glascow coma scale total->11",
+        "Glascow coma scale total->10",
+        "Glascow coma scale total->13",
+        "Glascow coma scale total->12",
+        "Glascow coma scale total->15",
+        "Glascow coma scale total->14",
+        "Glascow coma scale total->3",
+        "Glascow coma scale total->5",
+        "Glascow coma scale total->4",
+        "Glascow coma scale total->7",
+        "Glascow coma scale total->6",
+        "Glascow coma scale total->9",
+        "Glascow coma scale total->8"
+      ],
+      "Glascow coma scale verbal response": [
+        "Glascow coma scale verbal response->1 No Response",
+        "Glascow coma scale verbal response->No Response",
+        "Glascow coma scale verbal response->Confused",
+        "Glascow coma scale verbal response->Inappropriate Words",
+        "Glascow coma scale verbal response->Oriented",
+        "Glascow coma scale verbal response->No Response-ETT",
+        "Glascow coma scale verbal response->5 Oriented",
+        "Glascow coma scale verbal response->Incomprehensible sounds",
+        "Glascow coma scale verbal response->1.0 ET/Trach",
+        "Glascow coma scale verbal response->4 Confused",
+        "Glascow coma scale verbal response->2 Incomp sounds",
+        "Glascow coma scale verbal response->3 Inapprop words"
+      ]
+    },
+    "continuous_features": [
+      "Diastolic blood pressure",
+      "Fraction inspired oxygen",
+      "Glucose",
+      "Heart Rate",
+      "Height",
+      "Mean blood pressure",
+      "Oxygen saturation",
+      "Respiratory rate",
+      "Systolic blood pressure",
+      "Temperature",
+      "Weight",
+      "pH"
+    ],
+    "units": {
+      "Diastolic blood pressure": "mmHg",
+      "Fraction inspired oxygen": null,
+      "Glucose": "mg/dL",
+      "Heart Rate": "bpm",
+      "Height": "cm",
+      "Mean blood pressure": "mmHg",
+      "Oxygen saturation": "%",
+      "Respiratory rate": "breaths per minute",
+      "Systolic blood pressure": "mmHg",
+      "Temperature": "degrees Celsius",
+      "Weight": "kg",
+      "pH": null
+    },
+    "inactive_compatibility_columns": [
+      "Glascow coma scale eye opening->3 To speech",
+      "Glascow coma scale eye opening->1 No Response",
+      "Glascow coma scale eye opening->4 Spontaneously",
+      "Glascow coma scale eye opening->None",
+      "Glascow coma scale eye opening->2 To pain",
+      "Glascow coma scale motor response->1 No Response",
+      "Glascow coma scale motor response->3 Abnorm flexion",
+      "Glascow coma scale motor response->4 Flex-withdraws",
+      "Glascow coma scale motor response->6 Obeys Commands",
+      "Glascow coma scale motor response->5 Localizes Pain",
+      "Glascow coma scale motor response->2 Abnorm extensn",
+      "Glascow coma scale total->3",
+      "Glascow coma scale verbal response->1 No Response",
+      "Glascow coma scale verbal response->5 Oriented",
+      "Glascow coma scale verbal response->1.0 ET/Trach",
+      "Glascow coma scale verbal response->4 Confused",
+      "Glascow coma scale verbal response->2 Incomp sounds",
+      "Glascow coma scale verbal response->3 Inapprop words"
+    ]
+  },
+  "privacy": {
+    "forbidden_keys": [
+      "PatientID",
+      "RecordID",
+      "subject_id",
+      "hadm_id",
+      "stay_id",
+      "record_time",
+      "timestamp",
+      "outcome",
+      "label",
+      "labels",
+      "y",
+      "embedding",
+      "embeddings",
+      "test_metrics"
+    ],
+    "anonymous_sample_pattern": "^sample_[0-9]{6}$"
+  },
+  "fixed_limitations": [
+    "Content is based only on structured records from the first 48 hours after ICU admission.",
+    "Unobserved values are not described as real measurements.",
+    "The three probabilities are research-model outputs, not clinical diagnoses.",
+    "Labels were not provided to the Agent.",
+    "No patient identity information is included."
+  ]
+}
