@@ -719,6 +719,7 @@ def load_sample_indices(path: Path) -> np.ndarray:
 
 
 def export_expert_smoke(args: argparse.Namespace) -> dict[str, Any]:
+    seed_everything(args.seed)
     device = torch.device(args.device)
     dataset = FixedSequenceDataset(args.data_dir, "test")
     indices = load_sample_indices(args.sample_manifest)
@@ -961,6 +962,7 @@ def run_shap_smoke(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def export_full_expert_outputs(args: argparse.Namespace) -> dict[str, Any]:
+    seed_everything(args.seed)
     device = torch.device(args.device)
     model, checkpoint = load_checkpoint_model(
         args.model,
