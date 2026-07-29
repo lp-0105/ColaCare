@@ -9,6 +9,7 @@ from scripts.prepare_mimiciv_formal import (
     normalize_formal_category,
     should_replace_event,
 )
+from scripts.validate_mimiciv_processed import summarize_categorical_tensors
 from utils.mimiciv_preprocess_utils import (
     COLACARE_59_CATEGORICAL_LEVELS,
     NUMERICAL_FEATURES,
@@ -105,3 +106,36 @@ def test_formal_config_has_no_smoke_limits():
     assert config["max_chartevents_rows"] is None
     assert config["observation_hours"] == 48
     assert config["time_bin_hours"] == 1
+
+
+def test_categorical_tensor_summary_detects_one_hot_values_marked_missing():
+    x = pd.Series(
+        [
+            [
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        ]
+    )
+    mask = pd.Series(
+        [
+            [
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0],
+            ]
+        ]
+    )
+
+    summary = summarize_categorical_tensors(
+        x,
+        mask,
+        categorical_columns=["feature->missing", "feature->observed"],
+        input_offset=2,
+    )
+
+    assert summary["nonzero_counts"] == {
+        "feature->missing": 1,
+        "feature->observed": 1,
+    }
+    assert summary["missing_one_hot_violations"] == 1
+    assert summary["all_zero_columns"] == []

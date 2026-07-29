@@ -186,3 +186,26 @@ and CUDA on an RTX 4060 Laptop GPU. It completed in 10.780 s (8.267 s for the
 epoch), wrote and reloaded its checkpoint, and returned finite probabilities.
 The training loss 0.3277 and evaluation values are smoke diagnostics only, not
 paper-comparable metrics.
+
+## Formal-v2 correction (2026-07-29)
+
+The formal-v1 fixed-vocabulary encoder converted missing categorical values to
+strings before one-hot matching. This made all 843,807 missing GCS eye-opening
+elements activate the historical `->None` column while their masks still
+marked them missing. See `docs/MIMICIV_GCS_NONE_AUDIT.md` for the raw-table,
+parquet, split, and mask evidence.
+
+Formal-v2 is regenerated from the unchanged formatted parquet with the same
+cohort, labels, subject split, normalization policy, feature order, and
+59-dimensional dynamic contract. It differs only in correct categorical
+missing-value handling. The strengthened validator reports zero one-hot values
+at missing positions and 18 actual all-zero historical columns.
+
+Consequences:
+
+- formal-v1 data and model results are retained for audit only;
+- RETAIN, ConCare, and AdaCare must all be retrained on formal-v2;
+- no v1 checkpoint or expert output may be combined with v2 results;
+- the previous AdaCare result is independently invalid because its recurrent
+  layer interpreted `[B,T,F]` as `[T,B,F]`; see
+  `docs/ADACARE_BATCH_SEMANTICS.md`.

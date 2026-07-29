@@ -16,7 +16,41 @@ if str(REPO_ROOT) not in sys.path:
 from utils.mimiciv_preprocess_utils import (
     CATEGORICAL_FEATURES,
     COLACARE_59_CATEGORICAL_LEVELS,
+    formal_dynamic_columns,
 )
+
+
+def summarize_categorical_tensors(
+    x_values: Any,
+    mask_values: Any,
+    categorical_columns: list[str],
+    input_offset: int = 2,
+) -> dict[str, Any]:
+    counts = np.zeros(len(categorical_columns), dtype=np.int64)
+    missing_one_hot_violations = 0
+    stop = input_offset + len(categorical_columns)
+    for x_value, mask_value in zip(x_values, mask_values, strict=True):
+        x_array = np.asarray(x_value)
+        mask_array = np.asarray(mask_value)
+        categorical_x = x_array[:, input_offset:stop]
+        categorical_mask = mask_array[:, input_offset:stop]
+        if categorical_x.shape != categorical_mask.shape:
+            raise AssertionError("categorical x/mask shapes differ")
+        counts += np.count_nonzero(categorical_x, axis=0)
+        missing_one_hot_violations += int(
+            np.count_nonzero((categorical_mask != 0) & (categorical_x != 0))
+        )
+    nonzero_counts = {
+        column: int(count)
+        for column, count in zip(categorical_columns, counts, strict=True)
+    }
+    return {
+        "nonzero_counts": nonzero_counts,
+        "missing_one_hot_violations": missing_one_hot_violations,
+        "all_zero_columns": [
+            column for column, count in nonzero_counts.items() if count == 0
+        ],
+    }
 
 
 def validate_processed(parquet_path: Path, data_dir: Path) -> dict[str, Any]:
@@ -34,6 +68,13 @@ def validate_processed(parquet_path: Path, data_dir: Path) -> dict[str, Any]:
 
     splits: dict[str, Any] = {}
     record_sets: dict[str, set[str]] = {}
+    expected_dynamic_columns = formal_dynamic_columns()
+    dynamic_columns = list(pd.read_pickle(data_dir / "labtest_features.pkl"))
+    if dynamic_columns != expected_dynamic_columns:
+        raise AssertionError("labtest_features.pkl does not match the 59-dimensional contract")
+    categorical_columns = expected_dynamic_columns[:47]
+    tensor_level_counts = {column: 0 for column in categorical_columns}
+    missing_one_hot_violations = 0
     for mode in ["train", "val", "test"]:
         x = pd.read_pickle(data_dir / f"{mode}_x.pkl")
         y = pd.read_pickle(data_dir / f"{mode}_y.pkl")
@@ -61,6 +102,16 @@ def validate_processed(parquet_path: Path, data_dir: Path) -> dict[str, Any]:
         expected_labels = episode_labels.loc[pid].to_numpy(dtype=int)
         if not np.array_equal(pickle_labels, expected_labels):
             raise AssertionError(f"{mode} Outcome labels do not match formatted parquet")
+        categorical_summary = summarize_categorical_tensors(
+            x,
+            mask,
+            categorical_columns=categorical_columns,
+        )
+        missing_one_hot_violations += categorical_summary[
+            "missing_one_hot_violations"
+        ]
+        for column, count in categorical_summary["nonzero_counts"].items():
+            tensor_level_counts[column] += count
         splits[mode] = {
             "episodes": len(pid),
             "positive": int(pickle_labels.sum()),
@@ -105,6 +156,28 @@ def validate_processed(parquet_path: Path, data_dir: Path) -> dict[str, Any]:
         for feature in CATEGORICAL_FEATURES
     }
     inactive_levels = {key: value for key, value in inactive_levels.items() if value}
+    expected_level_counts = {
+        f"{feature}->{level}": int((parquet[feature] == level).sum())
+        for feature, levels in COLACARE_59_CATEGORICAL_LEVELS.items()
+        for level in levels
+    }
+    level_count_mismatches = {
+        column: {
+            "parquet": expected_level_counts[column],
+            "tensor": tensor_level_counts[column],
+        }
+        for column in categorical_columns
+        if expected_level_counts[column] != tensor_level_counts[column]
+    }
+    if missing_one_hot_violations:
+        raise AssertionError(
+            "categorical one-hot values are active where the missing mask marks them missing"
+        )
+    if level_count_mismatches:
+        raise AssertionError("categorical tensor counts do not match formatted parquet")
+    actual_all_zero_columns = [
+        column for column, count in tensor_level_counts.items() if count == 0
+    ]
     report = {
         "status": "PASS",
         "formatted_rows": int(len(parquet)),
@@ -122,6 +195,13 @@ def validate_processed(parquet_path: Path, data_dir: Path) -> dict[str, Any]:
         "inactive_fixed_level_count": int(sum(map(len, inactive_levels.values()))),
         "observed_categorical_levels": observed_levels,
         "inactive_fixed_levels": inactive_levels,
+        "categorical_tensor_contract": {
+            "status": "PASS",
+            "missing_one_hot_violations": missing_one_hot_violations,
+            "parquet_tensor_level_count_mismatches": level_count_mismatches,
+            "actual_all_zero_fixed_level_count": len(actual_all_zero_columns),
+            "actual_all_zero_fixed_levels": actual_all_zero_columns,
+        },
         "notes_generated": False,
     }
     return report

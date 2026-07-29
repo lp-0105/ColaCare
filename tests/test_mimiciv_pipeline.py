@@ -20,7 +20,10 @@ from scripts.train_mimiciv_ehr_smoke import (
     pad_collate,
 )
 import psutil
-from utils.mimiciv_preprocess_utils import preprocess_formatted_frame
+from utils.mimiciv_preprocess_utils import (
+    COLACARE_59_CATEGORICAL_LEVELS,
+    preprocess_formatted_frame,
+)
 
 
 def test_normalize_chart_value_converts_units_and_rejects_implausible_values():
@@ -157,6 +160,35 @@ def test_normalization_statistics_are_derived_only_from_training_subjects(tmp_pa
     assert baseline["subject_splits"] == changed["subject_splits"]
     assert baseline_stats["mean"]["Heart Rate"] == changed_stats["mean"]["Heart Rate"]
     assert baseline_stats["std"]["Heart Rate"] == changed_stats["std"]["Heart Rate"]
+
+
+def test_fixed_none_category_does_not_encode_missing_gcs_values(tmp_path: Path):
+    frame = _synthetic_formatted_frame()
+    frame["Capillary refill rate"] = "0.0"
+    frame.loc[frame["RecordTime"].dt.hour == 0, "Glascow coma scale eye opening"] = "None"
+    frame.loc[frame["RecordTime"].dt.hour == 1, "Glascow coma scale eye opening"] = None
+    frame.loc[
+        frame["RecordTime"].dt.hour == 2, "Glascow coma scale eye opening"
+    ] = "Spontaneously"
+
+    preprocess_formatted_frame(
+        frame,
+        tmp_path,
+        seed=42,
+        categorical_levels=COLACARE_59_CATEGORICAL_LEVELS,
+    )
+    dynamic = pd.read_pickle(tmp_path / "labtest_features.pkl")
+    column = 2 + dynamic.index("Glascow coma scale eye opening->None")
+
+    for split in ("train", "val", "test"):
+        x = np.asarray(pd.read_pickle(tmp_path / f"{split}_x.pkl"), dtype=np.float32)
+        mask = np.asarray(
+            pd.read_pickle(tmp_path / f"{split}_missing_mask.pkl"), dtype=np.float32
+        )
+        assert np.array_equal(x[:, :, column], np.array([[1.0, 0.0, 0.0]] * len(x)))
+        assert np.array_equal(
+            mask[:, :, column], np.array([[0.0, 1.0, 0.0]] * len(mask))
+        )
 
 
 def test_smoke_collate_pads_sequences_and_preserves_last_outcome():

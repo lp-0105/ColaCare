@@ -249,7 +249,7 @@ def _encode_split(
         for feature in CATEGORICAL_FEATURES:
             source = group[feature]
             missing = source.isna()
-            source_text = source.astype(str).str.strip()
+            source_text = source.fillna("").astype(str).str.strip()
             for level in levels[feature]:
                 column = f"{feature}->{level}"
                 raw[column] = (source_text == level).astype(float)

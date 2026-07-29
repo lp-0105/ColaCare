@@ -194,9 +194,13 @@ class AdaCareLayer(nn.Module):
         )
 
         if rnn_type == "gru":
-            self.rnn = nn.GRU(input_dim + 3 * kernel_num, hidden_dim)
+            self.rnn = nn.GRU(
+                input_dim + 3 * kernel_num, hidden_dim, batch_first=True
+            )
         else:
-            self.rnn = nn.LSTM(input_dim + 3 * kernel_num, hidden_dim)
+            self.rnn = nn.LSTM(
+                input_dim + 3 * kernel_num, hidden_dim, batch_first=True
+            )
         # self.nn_output = nn.Linear(hidden_dim, output_dim)
         self.nn_dropout = nn.Dropout(dropout)
 

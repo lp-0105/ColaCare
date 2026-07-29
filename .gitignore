@@ -46,6 +46,7 @@ tmp/
 *.tar
 *.tar.gz
 *.zip
+*.bundle
 2410.02551v2.pdf
 .huggingface/
 .ollama/
