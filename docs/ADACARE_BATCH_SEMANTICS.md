@@ -52,3 +52,11 @@ The resulting semantic path is:
 The prediction tolerance is `1e-5`; checkpoint reload tolerance is `1e-7`.
 Formal L20 training may begin only after these tests and the equivalent
 formal-data runtime gate pass.
+
+On the L20, the corrected model initially showed batch-size-only numerical
+differences up to `6.89e-05` while PyTorch allowed TF32. Disabling TF32 for
+CUDA matrix multiplication and cuDNN reduced the maximum error to
+`5.96e-08`, with zero permutation and companion-sample error. The formal
+expert-stage runner therefore fixes matrix multiplication to strict FP32 in
+`seed_everything`; this is a numerical reproducibility setting and does not
+change the AdaCare architecture or feature contract.
