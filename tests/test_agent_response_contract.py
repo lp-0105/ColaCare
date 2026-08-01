@@ -112,6 +112,30 @@ class RepairPromptTests(unittest.TestCase):
         for token in ("patientid", "subject_id", "hadm_id", "stay_id", "outcome_label"):
             self.assertNotIn(token, rendered)
 
+    def test_summary_only_comparison_rejects_evidence_or_conclusion_changes(self):
+        from utils.agent_response_contract import (
+            ResponseContractError,
+            validate_summary_only_change,
+        )
+
+        original = {
+            "reasoning_summary": "x" * 641,
+            "probability": 0.4,
+            "evidence": ["synthetic-evidence-a"],
+            "conclusion": "lower research-model estimate",
+        }
+        for protected_field, changed_value in (
+            ("evidence", ["synthetic-evidence-b"]),
+            ("conclusion", "changed conclusion"),
+        ):
+            repaired = dict(original)
+            repaired["reasoning_summary"] = "short"
+            repaired[protected_field] = changed_value
+            with self.subTest(field=protected_field), self.assertRaisesRegex(
+                ResponseContractError, protected_field
+            ):
+                validate_summary_only_change(original, repaired)
+
 
 class SummaryRepairFlowTests(unittest.TestCase):
     def test_label_or_patient_identifier_in_initial_prompt_is_rejected_before_call(self):

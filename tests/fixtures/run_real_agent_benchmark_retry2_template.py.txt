@@ -1,0 +1,139 @@
+from __future__ import annotations
+import hashlib, json, os, random, re, statistics, subprocess, sys, threading, time, traceback
+from pathlib import Path
+from typing import Any
+import numpy as np
+import psutil
+import torch
+from scripts.run_l20_pipeline_direct import DirectTransformersClient
+from utils.llm_client import parse_json_object
+from utils.prediction_schema import PREDICTION_SCHEMA, validate_prediction
+from utils.local_rag import load_synthetic_guidelines, retrieve_lexically
+BASE=Path(os.environ['BASE']); REPO=Path(os.environ['NEWREPO']); RUNROOT=Path(os.environ['RUNROOT']); LOGDIR=Path(os.environ['LOGDIR']); MODEL=Path(os.environ['MODEL'])
+INPUTS=RUNROOT/'real_agent_inputs_32'; RESULTS=RUNROOT/'agent_outputs_v1_retry2'; RESULT_FILES=RESULTS/'results'; REPEATS=RESULTS/'repeat_checks'; RESULT_FILES.mkdir(parents=True,exist_ok=True); REPEATS.mkdir(parents=True,exist_ok=True)
+MODEL_ID='Qwen/Qwen3-4B-Instruct-2507'; REVISION='cdbee75f17c01a7cc42f958dc650907174af0554'; SEED=42
+random.seed(SEED); np.random.seed(SEED); torch.manual_seed(SEED); torch.cuda.manual_seed_all(SEED)
+DISCUSSION_SCHEMA={'type':'object','properties':{'stance':{'type':'string','enum':['agree','disagree']},'revised_probability':{'type':'number','minimum':0,'maximum':1},'reasoning_summary':{'type':'string','minLength':1,'maxLength':600}},'required':['stance','revised_probability','reasoning_summary'],'additionalProperties':False}
+def sha_bytes(b:bytes)->str: return hashlib.sha256(b).hexdigest()
+def sha_file(p:Path)->str: return sha_bytes(p.read_bytes())
+def atomic_json(path:Path,value:Any)->None:
+ tmp=path.with_name('.'+path.name+'.tmp'); tmp.write_text(json.dumps(value,indent=2,ensure_ascii=False,sort_keys=True)+'\n',encoding='utf-8'); os.replace(tmp,path)
+def validate_discussion(v):
+ if set(v)!={'stance','revised_probability','reasoning_summary'}: raise ValueError('discussion fields mismatch')
+ if v['stance'] not in {'agree','disagree'}: raise ValueError('invalid stance')
+ p=v['revised_probability']
+ if isinstance(p,bool) or not isinstance(p,(int,float)) or not 0<=float(p)<=1: raise ValueError('invalid revised_probability')
+ s=v['reasoning_summary']
+ if not isinstance(s,str) or not s.strip() or len(s)>600: raise ValueError('invalid discussion summary')
+ return {'stance':v['stance'],'revised_probability':float(p),'reasoning_summary':s.strip()}
+def core_prediction(v): return {k:v[k] for k in ['risk_probability','prediction','reasoning_summary']}
+def core_discussion(v): return {k:v[k] for k in ['stance','revised_probability','reasoning_summary']}
+class ResourceMonitor:
+ def __init__(self): self.stop_event=threading.Event(); self.peak_rss=0; self.gpu_memory_peak=0; self.gpu_utils=[]; self.thread=threading.Thread(target=self.run,daemon=True)
+ def start(self): self.thread.start()
+ def stop(self): self.stop_event.set(); self.thread.join(timeout=3)
+ def run(self):
+  proc=psutil.Process(os.getpid())
+  while not self.stop_event.is_set():
+   try: self.peak_rss=max(self.peak_rss,proc.memory_info().rss)
+   except Exception: pass
+   try:
+    line=subprocess.check_output(['nvidia-smi','--query-gpu=memory.used,utilization.gpu','--format=csv,noheader,nounits','-i','0'],text=True,timeout=4).strip(); mem,util=[int(x.strip()) for x in line.split(',')[:2]]; self.gpu_memory_peak=max(self.gpu_memory_peak,mem); self.gpu_utils.append(util)
+   except Exception: pass
+   self.stop_event.wait(0.5)
+def build_query(patient):
+ ps=patient['patient_summary']; names=[]
+ for group in ['continuous_features','categorical_features']:
+  val=ps.get(group,{})
+  if isinstance(val,dict):
+   for name,summary in val.items():
+    if isinstance(summary,dict) and int(summary.get('observed_count',0) or 0)>0: names.append(str(name))
+  elif isinstance(val,list):
+   for item in val:
+    if isinstance(item,dict) and int(item.get('observed_count',0) or 0)>0: names.append(str(item.get('feature_name') or item.get('name') or ''))
+ q=' '.join(sorted(set(x for x in names if x))[:12]) or 'structured ICU observations'
+ if any(x in q.lower() for x in ['probability','outcome','subject_id','hadm_id','stay_id','patientid','recordid']): raise ValueError('unsafe RAG query')
+ return q
+def evidence_text(evidence):
+ return '\n'.join(f"Document [{x['id']}] score={x['score']} ({x['title']}): {x['content']}" for x in evidence)
+def privacy_scan(value):
+ text=json.dumps(value,ensure_ascii=False,sort_keys=True); low=text.lower(); banned=['subject_id','hadm_id','stay_id','patientid','recordid','date_of_birth','outcome_label','ground_truth','test_metric']
+ found=[x for x in banned if x in low]; timestamps=re.findall(r'\b\d{4}-\d{2}-\d{2}(?:[ t]\d{2}:\d{2})?\b',text)
+ return {'status':'PASS' if not found and not timestamps else 'FAIL','banned_tokens':found,'timestamp_like_values':timestamps[:5]}
+def ask(client,messages,schema,validator,sid,stage,max_attempts=3):
+ errors=[]; started=time.perf_counter(); call_records=[]
+ for attempt in range(1,max_attempts+1):
+  before=len(client.calls)
+  try:
+   response=client.chat(messages,response_schema=schema); value=validator(parse_json_object(response.content)); new=client.calls[before:]
+   for r in new: call_records.append({**r,'sample_id':sid,'stage':stage,'attempt':attempt,'status':'PASS'})
+   return value,{'attempts':attempt,'errors':errors,'wall_seconds':round(time.perf_counter()-started,4),'calls':call_records,'usage':{'prompt_tokens':response.prompt_tokens,'completion_tokens':response.completion_tokens}}
+  except Exception as exc:
+   new=client.calls[before:]
+   for r in new: call_records.append({**r,'sample_id':sid,'stage':stage,'attempt':attempt,'status':'PARSE_OR_VALIDATION_FAIL'})
+   errors.append({'attempt':attempt,'type':type(exc).__name__,'message':str(exc)[:500]})
+ return None,{'attempts':max_attempts,'errors':errors,'wall_seconds':round(time.perf_counter()-started,4),'calls':call_records,'usage':{'prompt_tokens':sum(int(r.get('input_tokens',0)) for r in call_records),'completion_tokens':sum(int(r.get('output_tokens',0)) for r in call_records)}}
+prov=json.loads((INPUTS/'input_provenance_manifest.json').read_text(encoding='utf-8')); prov_by={x['anonymous_sample_id']:x for x in prov['samples']}
+kb_path=REPO/'tests/fixtures/synthetic_guidelines.json'; documents=load_synthetic_guidelines(kb_path)
+monitor=ResourceMonitor(); monitor.start(); run_started=time.perf_counter(); torch.cuda.set_device(0); torch.cuda.reset_peak_memory_stats()
+client=DirectTransformersClient(MODEL,device='cuda:0',context_length=4096,max_new_tokens=128); model_loads=1; all_call_records=[]
+def run_one(j:int,destination:Path|None=None,resume:bool=True):
+ sid=f'sample_{j:06d}'; dest=destination or (RESULT_FILES/f'{sid}.json'); entry=prov_by[sid]
+ if resume and dest.exists():
+  old=json.loads(dest.read_text(encoding='utf-8'))
+  if old.get('status')=='PASS' and old.get('source_input_sha256')==entry['source_input_sha256']: return old,True
+ sample_started=time.perf_counter(); result={'status':'FAIL','anonymous_sample_id':sid,'schema_version':'real-expert-agent-smoke-v1','source_input_sha256':entry['source_input_sha256'],'input_json_sha256':entry['adapter_json_sha256'],'prompt_sha256':entry['prompt_sha256'],'model_id':MODEL_ID,'model_revision':REVISION,'kb_classification':'PLACEHOLDER KB — NOT PAPER RAG REPRODUCTION'}
+ try:
+  t=time.perf_counter(); jp=INPUTS/f'{sid}.json'; tp=INPUTS/f'{sid}.txt'; patient=json.loads(jp.read_text(encoding='utf-8')); patient_prompt=tp.read_text(encoding='utf-8'); adapter_load=time.perf_counter()-t
+  assert sha_file(jp)==entry['adapter_json_sha256'] and sha_file(tp)==entry['prompt_sha256'] and patient['anonymous_sample_id']==sid and patient.get('synthetic_demo') is False
+  rag_started=time.perf_counter(); query=build_query(patient); evidence=retrieve_lexically(query,documents,top_k=2); rag_seconds=time.perf_counter()-rag_started; evtext=evidence_text(evidence)
+  assert evidence and 'PLACEHOLDER' not in patient_prompt
+  reviews=[]; doctor_seconds=0.0
+  for doctor,focus in [('doctor-1','independent risk and trajectory review'),('doctor-2','independent evidence and missingness review')]:
+   messages=[{'role':'system','content':'You are a ColaCare DoctorAgent reviewing anonymized research data. Use only the supplied first-48-hour structured summary, expert model outputs, and explicitly synthetic placeholder retrieval snippets. Do not provide hidden chain-of-thought. Return only the requested JSON. This is research software validation, not clinical advice.'},{'role':'user','content':f'/no_think\nAnonymous sample: {sid}\nRole focus: {focus}\n[VALIDATED EXPERT-TO-AGENT INPUT]\n{patient_prompt}\n[PLACEHOLDER KB — NOT PAPER RAG REPRODUCTION]\n{evtext}\nProvide a concise, auditable model-estimated risk conclusion.'}]
+   val,meta=ask(client,messages,PREDICTION_SCHEMA,validate_prediction,sid,doctor); all_call_records.extend(meta['calls']); doctor_seconds+=meta['wall_seconds']
+   if val is None: raise RuntimeError(f'{doctor} failed: {meta["errors"]}')
+   reviews.append({'agent_id':doctor,'role':'DoctorAgent',**val,'attempts':meta['attempts'],'retry_errors':meta['errors'],'usage':meta['usage']})
+  patient_context=patient_prompt+'\n[PLACEHOLDER KB — NOT PAPER RAG REPRODUCTION]\n'+evtext
+  meta_messages=[{'role':'system','content':'You are the ColaCare MetaAgent. Synthesize two independent DoctorAgent JSON reviews using the validated anonymized research input. Return only the requested JSON, with no hidden chain-of-thought.'},{'role':'user','content':'/no_think\n'+patient_context+'\n[DOCTOR REVIEWS]\n'+json.dumps([core_prediction(x) for x in reviews],ensure_ascii=False,sort_keys=True)}]
+  initial_meta,mi=ask(client,meta_messages,PREDICTION_SCHEMA,validate_prediction,sid,'meta-initial'); all_call_records.extend(mi['calls'])
+  if initial_meta is None: raise RuntimeError(f'meta-initial failed: {mi["errors"]}')
+  critiques=[]; discussion_seconds=0.0
+  for doctor,own,other in [('doctor-1',reviews[0],reviews[1]),('doctor-2',reviews[1],reviews[0])]:
+   messages=[{'role':'system','content':'You are a ColaCare DoctorAgent in exactly one anonymized research discussion round. Compare the supplied peer and MetaAgent result to the validated input. Return only JSON and no hidden chain-of-thought.'},{'role':'user','content':'/no_think\n'+patient_context+'\n[OWN REVIEW]\n'+json.dumps(core_prediction(own),ensure_ascii=False,sort_keys=True)+'\n[PEER REVIEW]\n'+json.dumps(core_prediction(other),ensure_ascii=False,sort_keys=True)+'\n[INITIAL META]\n'+json.dumps(initial_meta,ensure_ascii=False,sort_keys=True)}]
+   val,dm=ask(client,messages,DISCUSSION_SCHEMA,validate_discussion,sid,doctor+'-discussion'); all_call_records.extend(dm['calls']); discussion_seconds+=dm['wall_seconds']
+   if val is None: raise RuntimeError(f'{doctor} discussion failed: {dm["errors"]}')
+   critiques.append({'agent_id':doctor,'role':'DoctorAgentDiscussion',**val,'attempts':dm['attempts'],'retry_errors':dm['errors'],'usage':dm['usage']})
+  final_messages=[{'role':'system','content':'You are the ColaCare MetaAgent producing the final consensus for anonymized research software validation. Use the validated input, two doctor reviews, initial meta result, and one discussion round. Return only JSON; do not provide hidden chain-of-thought.'},{'role':'user','content':'/no_think\n'+patient_context+'\n[DOCTOR REVIEWS]\n'+json.dumps([core_prediction(x) for x in reviews],ensure_ascii=False,sort_keys=True)+'\n[INITIAL META]\n'+json.dumps(initial_meta,ensure_ascii=False,sort_keys=True)+'\n[DISCUSSION]\n'+json.dumps([core_discussion(x) for x in critiques],ensure_ascii=False,sort_keys=True)}]
+  final_meta,mf=ask(client,final_messages,PREDICTION_SCHEMA,validate_prediction,sid,'meta-final'); all_call_records.extend(mf['calls'])
+  if final_meta is None: raise RuntimeError(f'meta-final failed: {mf["errors"]}')
+  expert_probs={m:float(v['probability']) for m,v in patient['expert_predictions'].items()}
+  result.update({'status':'PASS','expert_probabilities':expert_probs,'expert_probabilities_source':'expert_outputs_v2 via validated expert-agent-input-v1','rag':{'backend':'synthetic-lexical-overlap','top_k':2,'query_sha256':sha_bytes(query.encode()),'document_ids':[x['id'] for x in evidence],'document_scores':[x['score'] for x in evidence],'context_sha256':sha_bytes(evtext.encode()),'fragments_entered_all_agent_prompts':True},'doctor_results':reviews,'initial_meta':{**initial_meta,'attempts':mi['attempts'],'retry_errors':mi['errors'],'usage':mi['usage']},'discussion_rounds':1,'discussion':critiques,'final_consensus':{**final_meta,'attempts':mf['attempts'],'retry_errors':mf['errors'],'usage':mf['usage']},'timing_seconds':{'adapter_load':round(adapter_load,6),'rag':round(rag_seconds,6),'doctor_agents':round(doctor_seconds,4),'meta_agents':round(mi['wall_seconds']+mf['wall_seconds'],4),'discussion':round(discussion_seconds,4),'total':round(time.perf_counter()-sample_started,4)},'privacy':{'labels_provided':False,'real_identifiers_provided':False,'test_metrics_provided':False,'full_embeddings_provided':False}})
+  gate=privacy_scan(result); result['privacy_scan']=gate; assert gate['status']=='PASS'
+ except Exception as exc:
+  result['error']={'type':type(exc).__name__,'message':str(exc)[:1000],'traceback':traceback.format_exc()[-4000:]}; result['timing_seconds']={'total':round(time.perf_counter()-sample_started,4)}
+ atomic_json(dest,result); return result,False
+def stage_entries(r): return r.get('doctor_results',[])+r.get('discussion',[])+[r.get('initial_meta',{}),r.get('final_consensus',{})]
+def summarize(results,scope,calls_start,calls_end):
+ success=[r for r in results if r.get('status')=='PASS']; times=[r['timing_seconds']['total'] for r in success]; calls=all_call_records[calls_start:calls_end]; prompt=[int(r.get('input_tokens',0)) for r in calls]; completion=[int(r.get('output_tokens',0)) for r in calls]
+ return {'scope':scope,'samples':len(results),'success':len(success),'failed':len(results)-len(success),'success_rate':len(success)/len(results) if results else 0,'first_attempt_success':sum(all(int(x.get('attempts',1))==1 for x in stage_entries(r)) for r in success),'retry_success':sum(any(int(x.get('attempts',1))>1 for x in stage_entries(r)) for r in success),'total_retries':sum(max(0,int(x.get('attempts',1))-1) for r in success for x in stage_entries(r)),'primary_llm_attempts':len(calls),'patient_seconds':{'mean':statistics.mean(times) if times else None,'median':statistics.median(times) if times else None,'p95':float(np.percentile(times,95)) if times else None},'llm_call_seconds':{'mean':statistics.mean([r['inference_seconds'] for r in calls]) if calls else None,'median':statistics.median([r['inference_seconds'] for r in calls]) if calls else None,'p95':float(np.percentile([r['inference_seconds'] for r in calls],95)) if calls else None},'tokens':{'prompt_total':sum(prompt),'completion_total':sum(completion),'prompt_mean_per_call':statistics.mean(prompt) if prompt else None,'completion_mean_per_call':statistics.mean(completion) if completion else None},'parse_or_validation_failed_attempts':sum(r.get('status')!='PASS' for r in calls),'privacy_all_pass':all(r.get('privacy_scan',{}).get('status')=='PASS' for r in success),'expert_probability_alignment':'100% by input SHA and pre-Agent source verification','meta_completed':sum('final_consensus' in r for r in success),'rag_fragments_entered':all(r.get('rag',{}).get('fragments_entered_all_agent_prompts') for r in success),'model_load_count':model_loads}
+run_manifest={'status':'RUNNING','model_id':MODEL_ID,'revision':REVISION,'model_path':str(MODEL),'generation':{'context_length':4096,'max_new_tokens':128,'do_sample':False,'temperature':0.0,'top_p':1.0,'seed':SEED},'doctor_count':2,'discussion_rounds':1,'calls_per_complete_patient':6,'kb':'PLACEHOLDER KB — NOT PAPER RAG REPRODUCTION','adapter_commit':'aeaa0ace60d56c0c8a17fdb30b3e8cc7d69a815b','python':sys.executable,'model_load_count':model_loads,'started_at':time.strftime('%Y-%m-%dT%H:%M:%S%z')}; atomic_json(RESULTS/'run_manifest.json',run_manifest)
+first8=[]; start_calls=len(all_call_records)
+for j in range(8):
+ r,_=run_one(j); first8.append(r); atomic_json(RESULTS/'progress.json',{'stage':'smoke8','completed':j+1,'pass':sum(x.get('status')=='PASS' for x in first8),'last_sample':f'sample_{j:06d}'})
+smoke=summarize(first8,'first 8 fixed anonymous real formal_v2 samples',start_calls,len(all_call_records)); smoke.update({'status':'PASS' if smoke['success']>=7 and smoke['privacy_all_pass'] else 'FAIL','gate_to_32':smoke['success']>=7 and smoke['privacy_all_pass'],'sample_selection_fixed_before_agent':True,'positive_negative_labels_used_only_for_selection_evaluation':True,'labels_provided_to_agent':False,'smoke8_high_agreement_examples':2,'smoke8_high_disagreement_examples':2,'output_dir':str(RESULT_FILES)}); atomic_json(LOGDIR/'agent_smoke_8_report.json',smoke)
+if not smoke['gate_to_32']:
+ monitor.stop(); run_manifest.update({'status':'STOPPED_AT_8_GATE','finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z')}); atomic_json(RESULTS/'run_manifest.json',run_manifest); raise SystemExit(2)
+before_resume=len(client.calls); _,skipped=run_one(0,resume=True); resume_ok=skipped and len(client.calls)==before_resume
+all_results=list(first8); benchmark_calls_start=start_calls
+for j in range(8,32):
+ r,_=run_one(j); all_results.append(r); atomic_json(RESULTS/'progress.json',{'stage':'benchmark32','completed':j+1,'pass':sum(x.get('status')=='PASS' for x in all_results),'last_sample':f'sample_{j:06d}'})
+primary_calls_end=len(all_call_records); repeat_reports=[]
+for j in [i for i,r in enumerate(all_results) if r.get('status')=='PASS'][:2]:
+ sid=f'sample_{j:06d}'; rr,_=run_one(j,destination=REPEATS/f'{sid}.json',resume=False); orig=all_results[j]
+ def semantic(x): return {'doctor_results':[core_prediction(v) for v in x.get('doctor_results',[])],'initial_meta':core_prediction(x['initial_meta']) if 'initial_meta' in x else None,'discussion':[core_discussion(v) for v in x.get('discussion',[])],'final_consensus':core_prediction(x['final_consensus']) if 'final_consensus' in x else None}
+ a=semantic(orig); b=semantic(rr); repeat_reports.append({'anonymous_sample_id':sid,'status':rr.get('status'),'byte_identical_semantic_json':json.dumps(a,sort_keys=True,ensure_ascii=False).encode()==json.dumps(b,sort_keys=True,ensure_ascii=False).encode(),'original_semantic_sha256':sha_bytes(json.dumps(a,sort_keys=True,ensure_ascii=False).encode()),'repeat_semantic_sha256':sha_bytes(json.dumps(b,sort_keys=True,ensure_ascii=False).encode())})
+monitor.stop(); benchmark=summarize(all_results,'32 fixed anonymous real formal_v2 samples; first 8 are exact subset and reused',benchmark_calls_start,primary_calls_end); benchmark.update({'status':'PASS' if benchmark['success']==32 and benchmark['privacy_all_pass'] else 'PARTIAL','first8_reused':True,'resume_skip_verified':resume_ok,'repeat_checks':repeat_reports,'repeat_deterministic_all':all(x['byte_identical_semantic_json'] for x in repeat_reports),'repeat_llm_attempts':len(all_call_records)-primary_calls_end,'total_llm_attempts_including_repeats':len(all_call_records)-benchmark_calls_start,'model_load_seconds':client.model_load_seconds,'gpu_memory_before_load_mib':client.gpu_memory_before_load_mib,'gpu_memory_after_load_mib':client.gpu_memory_after_load_mib,'torch_peak_allocated_mib':round(torch.cuda.max_memory_allocated()/1024**2,2),'torch_peak_reserved_mib':round(torch.cuda.max_memory_reserved()/1024**2,2),'nvidia_smi_peak_used_mib':monitor.gpu_memory_peak,'peak_rss_mib':round(monitor.peak_rss/1024**2,2),'gpu_utilization_percent':{'mean':statistics.mean(monitor.gpu_utils) if monitor.gpu_utils else None,'peak':max(monitor.gpu_utils) if monitor.gpu_utils else None,'samples':len(monitor.gpu_utils)},'wall_seconds_including_model_load_and_repeats':round(time.perf_counter()-run_started,4),'result_bytes':sum(p.stat().st_size for p in RESULT_FILES.glob('sample_*.json')),'output_dir':str(RESULT_FILES)}); atomic_json(LOGDIR/'agent_benchmark_32_report.json',benchmark)
+run_manifest.update({'status':benchmark['status'],'finished_at':time.strftime('%Y-%m-%dT%H:%M:%S%z'),'model_load_count':model_loads,'primary_samples':32,'unique_real_samples_processed':32,'full_shap_run':False,'fusion_run':False}); atomic_json(RESULTS/'run_manifest.json',run_manifest)
+print(json.dumps({'smoke8':{k:smoke.get(k) for k in ['status','success','failed','gate_to_32','primary_llm_attempts']},'benchmark32':{k:benchmark.get(k) for k in ['status','success','failed','primary_llm_attempts','total_llm_attempts_including_repeats','model_load_seconds','nvidia_smi_peak_used_mib','peak_rss_mib','wall_seconds_including_model_load_and_repeats','repeat_deterministic_all']}},indent=2))
+raise SystemExit(0 if benchmark['status']=='PASS' else 3)

@@ -1,0 +1,113 @@
+{
+  "schema_version": "agent-validator-runtime-compat-audit-v1",
+  "audit_scope": "Local repository and the SHA-pinned retry2 runtime source only; no L20 access was performed.",
+  "baseline": {
+    "branch": "fix/agent-reasoning-summary-contract",
+    "commit": "3b9ca43d822b06f7d64bb325137d42128ecd61a2",
+    "previous_full_test_result": "143 passed",
+    "previous_remote_symptom": "NameError: name 'validate_prediction' is not defined before the first LLM call",
+    "previous_remote_stop_report_sha256": "e4263a88bc42fa6c0686543f51f95b43e58137e8b5e5483ac34496bef3d5fd8c"
+  },
+  "coverage_gap": {
+    "why_143_passed_missed_the_error": "The tests exercised build_retry4_source with a shortened source string and tested the canonical validator directly, but never materialized, imported, and dynamically executed the SHA-pinned retry2 runtime after transformation. The shortened fixture omitted the three legacy validator call sites.",
+    "layers_previously_verified": [
+      "canonical summary boundaries and repair behavior",
+      "prompt/validator length alignment",
+      "isolated retry4 output-name string transformation",
+      "syntax of tracked Python files",
+      "privacy and label unit checks"
+    ],
+    "layers_not_previously_verified": [
+      "materialization of the complete retry4 runtime from the real retry2 template",
+      "safe import of the generated runtime",
+      "resolution of globals used by DoctorAgent and MetaAgent call sites",
+      "execution of those call sites with a stub LLM",
+      "a fail-closed preflight before model construction"
+    ],
+    "compileall_limitation": "compileall compiled the tracked generator, not the runtime text created later by build_retry4_source. Even compiling the generated text would only prove syntax; Python resolves a global function name when the call executes, so the NameError is not a syntax error.",
+    "why_error_appeared_after_qwen_load": "The generated program constructed DirectTransformersClient at module execution before run_one reached the first DoctorAgent validation call. No preflight imported or exercised the generated call graph before client construction.",
+    "required_pre_model_detection": "Materialize the complete runtime, py_compile it, import it without invoking its main function, resolve and inspect all validator callbacks, and execute the real generated DoctorAgent/MetaAgent path with a synthetic stub client before allowing model construction."
+  },
+  "runtime_generation": {
+    "generator_entry": "scripts/run_real_agent_benchmark_retry4.py:build_retry4_source",
+    "launcher_entry": "scripts/run_real_agent_benchmark_retry4.py:main",
+    "real_template_local_evidence_path": "artifacts/agent_adapter_real_smoke_v1/retry2_results/run_real_agent_benchmark_retry2.py",
+    "real_template_sha256": "21977f9c0d993bead3f8d437e6adf0a750931433521edbd41f5b53fe54e2fda8",
+    "deployment_template_path_contract": "$RUNROOT/run_real_agent_benchmark_retry2.py",
+    "previous_generation_method": "The launcher read retry2 source text, applied guarded exact/regex substitutions, then compiled and executed the resulting in-memory string with exec.",
+    "current_generation_method": "The launcher SHA-verifies the complete retry2 template, applies guarded transformations, writes an import-safe final runner and generation manifest, runs a fail-closed compile/import/callback preflight, and only then executes deployed_main.",
+    "outside_normal_test_scope": true,
+    "previous_test_fixture_gap": "tests/test_real_agent_benchmark_retry4.py used MINIMAL_RETRY2_SOURCE, which contained the legacy import but none of the DoctorAgent or MetaAgent validate_prediction call sites."
+  },
+  "validator_inventory": {
+    "canonical": {
+      "name": "validate_prediction_response",
+      "definition": "utils/agent_response_contract.py:147",
+      "signature": "(value: Mapping[str, Any]) -> dict[str, Any]",
+      "return_type": "Validated dictionary containing exactly risk_probability, prediction, and reasoning_summary",
+      "exceptions": [
+        "ResponseContractError for field, type, range, Markdown, privacy-token, and other contract violations",
+        "ReasoningSummaryLengthError when reasoning_summary exceeds 640 Unicode characters"
+      ]
+    },
+    "legacy_compatibility_wrapper": {
+      "name": "validate_prediction",
+      "definition": "utils/prediction_schema.py:16",
+      "signature": "(value: Mapping[str, Any]) -> dict[str, Any]",
+      "semantics": "Delegates directly to validate_prediction_response; it does not contain a second validation implementation.",
+      "remaining_valid_callers": [
+        "scripts/run_l20_pipeline_direct.py",
+        "scripts/test_l20_transformers.py",
+        "scripts/test_llm_api.py",
+        "utils/smoke_agents.py",
+        "their unit tests"
+      ]
+    },
+    "same_name_different_semantics_found": false,
+    "legacy_compatibility_still_needed_elsewhere": true
+  },
+  "failing_generated_references": [
+    {
+      "role": "DoctorAgent",
+      "template_location": "SHA-pinned retry2 source line 94",
+      "generated_location": "generated retry4 line 94",
+      "expression": "ask(..., PREDICTION_SCHEMA, validate_prediction, sid, doctor)"
+    },
+    {
+      "role": "MetaAgent initial",
+      "template_location": "SHA-pinned retry2 source line 99",
+      "generated_location": "generated retry4 line 99",
+      "expression": "ask(..., PREDICTION_SCHEMA, validate_prediction, sid, 'meta-initial')"
+    },
+    {
+      "role": "MetaAgent final",
+      "template_location": "SHA-pinned retry2 source line 108",
+      "generated_location": "generated retry4 line 108",
+      "expression": "ask(..., PREDICTION_SCHEMA, validate_prediction, sid, 'meta-final')"
+    }
+  ],
+  "root_cause": {
+    "generator_change": "scripts/run_real_agent_benchmark_retry4.py replaces the retry2 import of PREDICTION_SCHEMA and validate_prediction with canonical agent_response_contract imports.",
+    "omission": "The generator did not replace the three legacy validate_prediction call-site identifiers and did not define a compatibility alias in generated scope.",
+    "effect": "Generated source compiled, loaded Qwen, then each run_one invocation raised NameError before client.chat was called.",
+    "not_a_summary_contract_failure": true
+  },
+  "additional_runtime_only_finding": {
+    "finding": "The generated result privacy scan inspected its own audit key test_metrics_provided=false and matched the prohibited substring test_metric.",
+    "effect": "After the validator NameError was fixed, otherwise successful synthetic integration results would have failed the privacy gate because of a false positive in audit metadata.",
+    "resolution": "The negative audit metadata key is rendered as evaluation_metrics_provided=false. The prohibited-token scan itself is unchanged and no privacy rule is weakened."
+  },
+  "recommended_fix": {
+    "choice": "A",
+    "strategy": "Replace the three legacy generated call sites with validate_prediction_response while retaining one canonical implementation.",
+    "reason": "Only three explicit generated call sites require repair. A new alias in generated scope would hide future missed transformations, whereas guarded replacement makes the deployment contract explicit and fail-fast.",
+    "must_not_change": [
+      "500-character prompt target",
+      "640-character validator hard limit",
+      "two summary-only repairs",
+      "repair field immutability",
+      "privacy and label gates",
+      "model parameters, sample selection, expert probabilities, and KB content"
+    ]
+  }
+}
