@@ -9,6 +9,10 @@ import tempfile
 import time
 from typing import Any, Mapping
 
+from utils.agent_response_contract import (
+    DISCUSSION_RESPONSE_SCHEMA,
+    validate_discussion_response,
+)
 from utils.llm_client import LLMClient, LLMError, parse_json_object
 from utils.local_rag import retrieve_lexically
 from utils.prediction_schema import PREDICTION_SCHEMA, validate_prediction
@@ -18,16 +22,7 @@ class SmokePipelineError(RuntimeError):
     """Raised when a fictional smoke stage cannot produce a valid result."""
 
 
-DISCUSSION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "stance": {"type": "string", "enum": ["agree", "disagree"]},
-        "revised_probability": {"type": "number", "minimum": 0, "maximum": 1},
-        "reasoning_summary": {"type": "string", "minLength": 1, "maxLength": 600},
-    },
-    "required": ["stance", "revised_probability", "reasoning_summary"],
-    "additionalProperties": False,
-}
+DISCUSSION_SCHEMA = DISCUSSION_RESPONSE_SCHEMA
 
 
 def validate_synthetic_patient(patient: Mapping[str, Any]) -> dict[str, Any]:
@@ -250,21 +245,10 @@ class SyntheticMetaAgent:
 
 
 def _validate_discussion(value: Mapping[str, Any]) -> dict[str, Any]:
-    if set(value) != {"stance", "revised_probability", "reasoning_summary"}:
-        raise SmokePipelineError("discussion JSON must contain exactly the required fields")
-    stance = value["stance"]
-    if stance not in {"agree", "disagree"}:
-        raise SmokePipelineError("discussion stance must be agree or disagree")
-    probability = value["revised_probability"]
-    if isinstance(probability, bool) or not isinstance(probability, (int, float)):
-        raise SmokePipelineError("revised_probability must be numeric")
-    probability = float(probability)
-    if not 0 <= probability <= 1:
-        raise SmokePipelineError("revised_probability must be between 0 and 1")
-    summary = value["reasoning_summary"]
-    if not isinstance(summary, str) or not summary.strip() or len(summary) > 600:
-        raise SmokePipelineError("discussion reasoning_summary must be concise and non-empty")
-    return {"stance": stance, "revised_probability": probability, "reasoning_summary": summary.strip()}
+    try:
+        return validate_discussion_response(value)
+    except LLMError as exc:
+        raise SmokePipelineError(str(exc)) from exc
 
 
 def _prediction_from(review: Mapping[str, Any]) -> dict[str, Any]:

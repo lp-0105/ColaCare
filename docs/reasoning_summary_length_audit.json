@@ -1,0 +1,67 @@
+{
+  "schema_version": "reasoning-summary-length-audit-v1",
+  "source_commit": "aeaa0ace60d56c0c8a17fdb30b3e8cc7d69a815b",
+  "scope": "retry3 fixed eight-sample DoctorAgent gate; no patient content included",
+  "verified_run_facts_source": "operator-provided retry3 state plus locally retained privacy-safe launcher and finalizer evidence",
+  "retry3": {
+    "samples": 8,
+    "doctor_agent_calls": 24,
+    "json_parse_success": 24,
+    "reasoning_summary_over_320": 24,
+    "other_schema_errors": 0,
+    "empty_required_fields": 0,
+    "meta_agent_completions": 0,
+    "call_semantics": "three complete case re-inferences using the same original messages; no format-repair request was used",
+    "privacy_or_label_leakage_in_saved_failure_evidence": 0,
+    "template_residue_in_raw_model_text": "not measurable because parsed response bodies were not retained locally"
+  },
+  "reasoning_summary_unicode_character_statistics": {
+    "exact_values_available": false,
+    "min": null,
+    "median": null,
+    "mean": null,
+    "p95": null,
+    "max": null,
+    "known_lower_bound_for_every_response": 321,
+    "reason_exact_values_are_unrecoverable": "retry3 retained only the generic validator error; it did not persist the parsed reasoning_summary or its actual length"
+  },
+  "evidence": {
+    "runtime_wrapper": "artifacts/agent_adapter_real_smoke_v1/retry2_results/run_real_agent_benchmark_retry3.py",
+    "runtime_wrapper_sha256": "880573bb0008d6b20a17850cfeaae76cf55750c16502f7934a00e8432e4e7198",
+    "runtime_wrapper_limit_locations": [
+      "prediction JSON Schema maxLength",
+      "discussion JSON Schema maxLength",
+      "prediction validator len(summary) check",
+      "retry2 discussion schema and validator substitutions",
+      "DoctorAgent prompt substitution"
+    ],
+    "retry_loop_location": "artifacts/agent_adapter_real_smoke_v1/retry2_results/run_real_agent_benchmark_retry2.py ask()",
+    "paper_pdf": "2410.02551v2.pdf",
+    "paper_search_result": "no 320-character, reasoning_summary, maxLength, or summary-length requirement found",
+    "upstream_commit_checked": "854878741b2a620fb7d0c643983a0f802b2bf3be",
+    "upstream_search_result": "no 320-character Agent output constraint found",
+    "tracked_repository_history_search_result": "no tracked Agent summary 320-character constraint found"
+  },
+  "origin_conclusion": {
+    "from_colacare_paper": false,
+    "from_official_repository": false,
+    "from_current_adapter_engineering": true,
+    "explanation": "the 320-character value was introduced only by the untracked retry3 runtime wrapper after retry2 truncation failures"
+  },
+  "prompt_validator_alignment": {
+    "initial_doctor_prompt_explicitly_stated_320": true,
+    "runtime_schema_and_validator_used_320": true,
+    "retry_received_actual_length": false,
+    "retry_received_allowed_maximum": false,
+    "retry_was_summary_only_format_repair": false,
+    "numeric_prompt_validator_mismatch_for_initial_doctor_call": false,
+    "workflow_mismatch": "validation failure details were not fed back; every retry repeated the full clinical inference"
+  },
+  "v2_decision": {
+    "prompt_target_unicode_characters": 500,
+    "validator_hard_max_unicode_characters": 640,
+    "maximum_summary_only_repairs": 2,
+    "silent_truncation": false,
+    "protected_fields_must_remain_equal": true
+  }
+}

@@ -147,6 +147,7 @@ class DirectTransformersClient:
         self.context_length = context_length
         self.max_new_tokens = max_new_tokens
         self.calls: list[dict[str, Any]] = []
+        self.last_raw_response: str | None = None
         if not self.model_path.is_dir():
             raise ValueError(f"model directory does not exist: {self.model_path}")
         if context_length <= 0 or context_length > 4096:
@@ -214,6 +215,7 @@ class DirectTransformersClient:
         output_ids = generated[0, input_tokens:]
         output_tokens = int(output_ids.shape[-1])
         raw = self.tokenizer.decode(output_ids, skip_special_tokens=True)
+        self.last_raw_response = raw
         self.calls.append(
             {
                 "call": len(self.calls) + 1,

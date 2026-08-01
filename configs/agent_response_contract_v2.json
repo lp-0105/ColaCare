@@ -1,0 +1,28 @@
+{
+  "schema_version": "agent-response-contract-v2",
+  "reasoning_summary": {
+    "prompt_target_unicode_characters": 500,
+    "validator_hard_max_unicode_characters": 640,
+    "sentence_guidance": "at most two complete sentences or three short sentences",
+    "markdown_allowed": false,
+    "hidden_chain_of_thought_allowed": false,
+    "semantic_scope": "final concise clinical reasoning summary only"
+  },
+  "repair": {
+    "eligible_error": "reasoning_summary_length_only",
+    "maximum_attempts": 2,
+    "full_case_reinference": false,
+    "allowed_changed_fields": [
+      "reasoning_summary"
+    ],
+    "silent_truncation_allowed": false,
+    "preserve_initial_raw_response": true,
+    "preserve_initial_raw_response_sha256": true
+  },
+  "runtime": {
+    "output_directory_name": "agent_outputs_v1_retry4",
+    "smoke_report_name": "agent_smoke_8_report_retry4.json",
+    "benchmark_report_name": "agent_benchmark_32_report_retry4.json",
+    "knowledge_base_classification": "PLACEHOLDER KB — NOT PAPER RAG REPRODUCTION"
+  }
+}
